@@ -40,17 +40,26 @@ const GRAVITY_VECTOR = new Vector3(0, 0, -9.81);
 const SPHERE_RESTITUTION = 0.85;
 const PLANE_RESTITUTION = 0.55;
 
-const LAUNCH_HEIGHT = 10;
-const LAUNCH_RADIUS = 4.5;
+const DEFAULT_LAUNCH_RADIUS = 4.5;
+const DEFAULT_LAUNCH_HEIGHT = 10;
+const LAUNCH_DISTANCE = Math.sqrt(DEFAULT_LAUNCH_RADIUS ** 2 + DEFAULT_LAUNCH_HEIGHT ** 2);
+const MIN_LAUNCH_HEIGHT = 0.5;
 
 interface HavokViewerProps {
   primaryModel: PrimaryModel;
   running: boolean;
   launchAngle: number;
+  launchElevation: number;
   launchSpeed: number;
 }
 
-export function HavokViewer({ primaryModel, running, launchAngle, launchSpeed }: HavokViewerProps): JSX.Element {
+export function HavokViewer({
+  primaryModel,
+  running,
+  launchAngle,
+  launchElevation,
+  launchSpeed
+}: HavokViewerProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sphereMeshRef = useRef<Mesh | null>(null);
@@ -139,7 +148,7 @@ export function HavokViewer({ primaryModel, running, launchAngle, launchSpeed }:
         sphereMaterial.roughness = 0.35;
         sphereMesh.material = sphereMaterial;
         sphereMesh.forceSharedVertices();
-        const initialPosition = computeLaunchPosition(launchAngle);
+        const initialPosition = computeLaunchPosition(launchAngle, launchElevation);
         sphereMesh.position.copyFrom(initialPosition);
 
         const planeAggregate = new PhysicsAggregate(
@@ -248,10 +257,10 @@ export function HavokViewer({ primaryModel, running, launchAngle, launchSpeed }:
     if (!mesh) {
       return;
     }
-    const newPosition = computeLaunchPosition(launchAngle);
+    const newPosition = computeLaunchPosition(launchAngle, launchElevation);
     mesh.position.copyFrom(newPosition);
     mesh.computeWorldMatrix(true);
-  }, [launchAngle, running]);
+  }, [launchAngle, launchElevation, running]);
 
   useEffect(() => {
     if (running) {
@@ -317,11 +326,14 @@ function normalizeMesh(mesh: Mesh): void {
   mesh.computeWorldMatrix(true);
 }
 
-function computeLaunchPosition(angle: number): Vector3 {
+function computeLaunchPosition(angle: number, elevation: number): Vector3 {
   const angleRad = (angle * Math.PI) / 180;
+  const elevationRad = (elevation * Math.PI) / 180;
+  const horizontalRadius = Math.cos(elevationRad) * LAUNCH_DISTANCE;
+  const height = Math.max(Math.sin(elevationRad) * LAUNCH_DISTANCE, MIN_LAUNCH_HEIGHT);
   return new Vector3(
-    Math.cos(angleRad) * LAUNCH_RADIUS,
-    Math.sin(angleRad) * LAUNCH_RADIUS,
-    LAUNCH_HEIGHT
+    Math.cos(angleRad) * horizontalRadius,
+    Math.sin(angleRad) * horizontalRadius,
+    height
   );
 }
