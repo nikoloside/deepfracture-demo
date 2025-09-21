@@ -9,7 +9,7 @@ import { Vector3, Matrix } from "@babylonjs/core/Maths/math.vector";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { PBRMetallicRoughnessMaterial } from "@babylonjs/core/Materials/PBR/pbrMetallicRoughnessMaterial";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate";
 import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin";
@@ -22,8 +22,8 @@ import "@babylonjs/core/Physics/joinedPhysicsEngineComponent";
 import "@babylonjs/loaders/OBJ/objFileLoader";
 
 const BASE_MODELS = {
-  plane: { filename: "plane.obj", scale: 12 },
-  sphere: { filename: "sphere.obj", scale: 1.6 }
+  plane: { filename: "plane.obj", scale: 16 },
+  sphere: { filename: "sphere.obj", scale: 1.0 }
 } as const;
 
 export const PRIMARY_MODELS = {
@@ -37,18 +37,24 @@ export const PRIMARY_MODELS = {
 export type PrimaryModel = keyof typeof PRIMARY_MODELS;
 
 const GRAVITY_VECTOR = new Vector3(0, 0, -9.81);
-const INITIAL_SPHERE_VELOCITY = new Vector3(0, 0, -6.5);
 const SPHERE_RESTITUTION = 0.85;
 const PLANE_RESTITUTION = 0.55;
+
+const LAUNCH_HEIGHT = 10;
+const LAUNCH_RADIUS = 4.5;
 
 interface HavokViewerProps {
   primaryModel: PrimaryModel;
   running: boolean;
+  launchAngle: number;
+  launchSpeed: number;
 }
 
-export function HavokViewer({ primaryModel, running }: HavokViewerProps): JSX.Element {
+export function HavokViewer({ primaryModel, running, launchAngle, launchSpeed }: HavokViewerProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sphereMeshRef = useRef<Mesh | null>(null);
+  const sphereAggregateRef = useRef<PhysicsAggregate | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -70,9 +76,9 @@ export function HavokViewer({ primaryModel, running }: HavokViewerProps): JSX.El
         const camera = new ArcRotateCamera(
           "orbitCamera",
           2*Math.PI/4,
-          3*Math.PI/4,
-          20,
-          Vector3.Zero(),
+          3*Math.PI/4+Math.PI/7,
+          12,
+          Vector3.Zero().add(new Vector3(0, 0, 1.5)),
           scene
         );
         camera.lowerRadiusLimit = 6;
@@ -106,21 +112,35 @@ export function HavokViewer({ primaryModel, running }: HavokViewerProps): JSX.El
 
         planeMesh.id = "plane";
         planeMesh.position = new Vector3(0, 0, 0);
-        const planeMaterial = new StandardMaterial("planeMaterial", scene);
-        planeMaterial.diffuseColor = new Color3(0.3, 0.35, 0.45);
-        planeMaterial.specularColor = Color3.Black();
+        const planeMaterial = new PBRMetallicRoughnessMaterial("planeMaterial", scene);
+        planeMaterial.baseColor = new Color3(0.32, 0.36, 0.45);
+        planeMaterial.metallic = 0;
+        planeMaterial.roughness = 0.6;
         planeMaterial.backFaceCulling = false;
         planeMesh.material = planeMaterial;
+        planeMesh.forceSharedVertices();
 
         primaryMesh.id = `primary-${primaryModel}`;
-        primaryMesh.position = new Vector3(0, 0, 3);
+        primaryMesh.position = new Vector3(0, 0, 2.5);
+        const primaryMaterial = new PBRMetallicRoughnessMaterial(
+          `primary-${primaryModel}-material`,
+          scene
+        );
+        primaryMaterial.baseColor = new Color3(0.78, 0.8, 0.86);
+        primaryMaterial.metallic = 0.1;
+        primaryMaterial.roughness = 0.45;
+        primaryMesh.material = primaryMaterial;
+        primaryMesh.forceSharedVertices();
 
         sphereMesh.id = "projectile";
-        sphereMesh.position = new Vector3(0, 0, 10);
-        const sphereMaterial = new StandardMaterial("sphereMaterial", scene);
-        sphereMaterial.diffuseColor = new Color3(0.85, 0.4, 0.45);
-        sphereMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
+        const sphereMaterial = new PBRMetallicRoughnessMaterial("sphereMaterial", scene);
+        sphereMaterial.baseColor = new Color3(0.85, 0.45, 0.52);
+        sphereMaterial.metallic = 0.15;
+        sphereMaterial.roughness = 0.35;
         sphereMesh.material = sphereMaterial;
+        sphereMesh.forceSharedVertices();
+        const initialPosition = computeLaunchPosition(launchAngle);
+        sphereMesh.position.copyFrom(initialPosition);
 
         const planeAggregate = new PhysicsAggregate(
           planeMesh,
@@ -140,6 +160,9 @@ export function HavokViewer({ primaryModel, running }: HavokViewerProps): JSX.El
           { mass: running ? 1 : 0, restitution: SPHERE_RESTITUTION },
           scene
         );
+
+        sphereMeshRef.current = sphereMesh;
+        sphereAggregateRef.current = sphereAggregate;
 
         const physicsPlugin = scene.getPhysicsEngine()?.getPhysicsPlugin() as HavokPlugin | undefined;
         const triggered = new Set<string>();
@@ -169,7 +192,9 @@ export function HavokViewer({ primaryModel, running }: HavokViewerProps): JSX.El
         }
 
         if (running && sphereAggregate.body) {
-          sphereAggregate.body.setLinearVelocity(INITIAL_SPHERE_VELOCITY.clone());
+          const launchDirection = Vector3.Zero().subtract(sphereMesh.position).normalize();
+          const initialVelocity = launchDirection.scale(launchSpeed);
+          sphereAggregate.body.setLinearVelocity(initialVelocity);
         }
 
         const resize = () => {
@@ -210,8 +235,34 @@ export function HavokViewer({ primaryModel, running }: HavokViewerProps): JSX.El
         engine.stopRenderLoop();
         engine.dispose();
       }
+      sphereMeshRef.current = null;
+      sphereAggregateRef.current = null;
     };
   }, [primaryModel, running]);
+
+  useEffect(() => {
+    if (running) {
+      return;
+    }
+    const mesh = sphereMeshRef.current;
+    if (!mesh) {
+      return;
+    }
+    const newPosition = computeLaunchPosition(launchAngle);
+    mesh.position.copyFrom(newPosition);
+    mesh.computeWorldMatrix(true);
+  }, [launchAngle, running]);
+
+  useEffect(() => {
+    if (running) {
+      return;
+    }
+    const aggregate = sphereAggregateRef.current;
+    if (!aggregate || !aggregate.body) {
+      return;
+    }
+    aggregate.body.setLinearVelocity(Vector3.Zero());
+  }, [launchSpeed, running]);
 
   return (
     <div className="havok-viewer">
@@ -264,4 +315,13 @@ function normalizeMesh(mesh: Mesh): void {
   const uniformScale = 1 / maxExtent;
   mesh.scaling = new Vector3(uniformScale, uniformScale, uniformScale);
   mesh.computeWorldMatrix(true);
+}
+
+function computeLaunchPosition(angle: number): Vector3 {
+  const angleRad = (angle * Math.PI) / 180;
+  return new Vector3(
+    Math.cos(angleRad) * LAUNCH_RADIUS,
+    Math.sin(angleRad) * LAUNCH_RADIUS,
+    LAUNCH_HEIGHT
+  );
 }

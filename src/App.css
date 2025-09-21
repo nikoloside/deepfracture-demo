@@ -59,6 +59,37 @@ body {
   gap: 0.75rem;
 }
 
+.panel__list + .panel__button {
+  margin-top: 1.25rem;
+}
+
+.panel__controls {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.panel__control {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.panel__control-label {
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.panel__slider {
+  width: 100%;
+}
+
+.panel__control-value {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
 .panel__button {
   width: 100%;
   display: flex;
@@ -134,7 +165,7 @@ body {
   border-radius: 1.25rem;
   border: 1px solid rgba(148, 163, 184, 0.16);
   overflow: hidden;
-  min-height: 420px;
+  min-height: 540px;
   position: relative;
 }
 

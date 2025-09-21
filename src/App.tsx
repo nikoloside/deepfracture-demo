@@ -18,6 +18,8 @@ export default function App(): JSX.Element {
   const [primaryModel, setPrimaryModel] = useState<PrimaryModel>("squirrel");
   const [isRunning, setIsRunning] = useState(false);
   const [sessionKey, setSessionKey] = useState(0);
+  const [launchAngle, setLaunchAngle] = useState(0);
+  const [launchSpeed, setLaunchSpeed] = useState(6.5);
 
   const modelOptions = Object.keys(PRIMARY_MODELS) as PrimaryModel[];
 
@@ -110,6 +112,34 @@ export default function App(): JSX.Element {
             </li>
           ))}
         </ul>
+        <div className="panel__controls">
+          <label className="panel__control">
+            <span className="panel__control-label">Launch angle</span>
+            <input
+              type="range"
+              min="0"
+              max="360"
+              step="1"
+              value={launchAngle}
+              onChange={(event) => setLaunchAngle(Number(event.target.value))}
+              className="panel__slider"
+            />
+            <span className="panel__control-value">{launchAngle.toFixed(0)}°</span>
+          </label>
+          <label className="panel__control">
+            <span className="panel__control-label">Launch speed</span>
+            <input
+              type="range"
+              min="2"
+              max="12"
+              step="0.1"
+              value={launchSpeed}
+              onChange={(event) => setLaunchSpeed(Number(event.target.value))}
+              className="panel__slider"
+            />
+            <span className="panel__control-value">{launchSpeed.toFixed(1)} u/s</span>
+          </label>
+        </div>
         <button
           type="button"
           className={isRunning ? "panel__button panel__button--disabled" : "panel__button"}
@@ -118,7 +148,13 @@ export default function App(): JSX.Element {
         >
           {isRunning ? "Simulation Running" : "Start Simulation"}
         </button>
-        <HavokViewer key={`${primaryModel}-${sessionKey}`} primaryModel={primaryModel} running={isRunning} />
+        <HavokViewer
+          key={`${primaryModel}-${sessionKey}`}
+          primaryModel={primaryModel}
+          running={isRunning}
+          launchAngle={launchAngle}
+          launchSpeed={launchSpeed}
+        />
       </section>
     </main>
   );
