@@ -1,0 +1,163 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: #0f172a;
+  color: rgba(226, 232, 240, 0.94);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app {
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.app__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.app__logo {
+  height: 3rem;
+  width: 3rem;
+  animation: spin 20s linear infinite;
+}
+
+.app__title {
+  font-size: 1.85rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(18px);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 1.75rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.4);
+}
+
+.panel__title {
+  margin: 0 0 1.5rem;
+  font-size: 1.25rem;
+}
+
+.panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.panel__button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(148, 163, 184, 0.12);
+  color: inherit;
+  font-size: 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.85rem;
+  padding: 0.75rem 1rem;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.panel__button:hover {
+  border-color: rgba(94, 234, 212, 0.6);
+}
+
+.panel__button--active {
+  background: rgba(94, 234, 212, 0.12);
+  border-color: rgba(94, 234, 212, 0.8);
+}
+
+.panel__button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel__label {
+  font-weight: 500;
+}
+
+.panel__meta {
+  font-variant-numeric: tabular-nums;
+}
+
+.panel__details {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.panel__details dt {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.panel__details dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.1rem;
+}
+
+.panel__note {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.havok-viewer {
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+  min-height: 420px;
+  position: relative;
+}
+
+.havok-viewer__canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.havok-viewer__canvas--dragging,
+.havok-viewer__canvas:active {
+  cursor: grabbing;
+}
+
+.havok-viewer__error {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  padding: 0.75rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+}
