@@ -11,7 +11,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { PBRMetallicRoughnessMaterial } from "@babylonjs/core/Materials/PBR/pbrMetallicRoughnessMaterial";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate";
-import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
+import { PhysicsShapeType, PhysicsMotionType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin";
 import type { Observer } from "@babylonjs/core/Misc/observable";
 import type { IPhysicsCollisionEvent } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
@@ -64,6 +64,11 @@ export function HavokViewer({
   const [error, setError] = useState<string | null>(null);
   const sphereMeshRef = useRef<Mesh | null>(null);
   const sphereAggregateRef = useRef<PhysicsAggregate | null>(null);
+  const planeAggregateRef = useRef<PhysicsAggregate | null>(null);
+  const primaryAggregateRef = useRef<PhysicsAggregate | null>(null);
+  const sceneRef = useRef<Scene | null>(null);
+  const collisionObserverRef = useRef<Observer<IPhysicsCollisionEvent> | null>(null);
+  const triggeredRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let disposed = false;
@@ -81,6 +86,7 @@ export function HavokViewer({
         engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
         scene = new Scene(engine);
         scene.clearColor = new Color3(0.04, 0.07, 0.12).toColor4(1);
+        sceneRef.current = scene;
 
         const camera = new ArcRotateCamera(
           "orbitCamera",
@@ -166,45 +172,14 @@ export function HavokViewer({
         const sphereAggregate = new PhysicsAggregate(
           sphereMesh,
           PhysicsShapeType.SPHERE,
-          { mass: running ? 1 : 0, restitution: SPHERE_RESTITUTION },
+          { mass: 0, restitution: SPHERE_RESTITUTION },
           scene
         );
 
         sphereMeshRef.current = sphereMesh;
         sphereAggregateRef.current = sphereAggregate;
-
-        const physicsPlugin = scene.getPhysicsEngine()?.getPhysicsPlugin() as HavokPlugin | undefined;
-        const triggered = new Set<string>();
-
-        if (running && physicsPlugin && sphereAggregate.body) {
-          physicsPlugin.setCollisionCallbackEnabled(sphereAggregate.body, true);
-          const collisionObservable = physicsPlugin.getCollisionObservable(sphereAggregate.body);
-          const observer: Observer<IPhysicsCollisionEvent> = collisionObservable.add(
-            (event: IPhysicsCollisionEvent) => {
-              if (event.collidedAgainst === primaryAggregate.body && !triggered.has("primary")) {
-                triggered.add("primary");
-                window.setTimeout(() => {
-                  window.alert(
-                    `Collision detected: sphere hit the ${PRIMARY_MODELS[primaryModel].label.toLowerCase()} mesh.`
-                  );
-                }, 0);
-              }
-              if (event.collidedAgainst === planeAggregate.body && !triggered.has("plane")) {
-                triggered.add("plane");
-                window.setTimeout(() => {
-                  window.alert("Collision detected: sphere impacted the plane.");
-                }, 0);
-              }
-            }
-          );
-          cleanupObservers.push(() => collisionObservable.remove(observer));
-        }
-
-        if (running && sphereAggregate.body) {
-          const launchDirection = Vector3.Zero().subtract(sphereMesh.position).normalize();
-          const initialVelocity = launchDirection.scale(launchSpeed);
-          sphereAggregate.body.setLinearVelocity(initialVelocity);
-        }
+        planeAggregateRef.current = planeAggregate;
+        primaryAggregateRef.current = primaryAggregate;
 
         const resize = () => {
           if (engine && !engine.isDisposed) {
@@ -246,8 +221,38 @@ export function HavokViewer({
       }
       sphereMeshRef.current = null;
       sphereAggregateRef.current = null;
+      planeAggregateRef.current = null;
+      primaryAggregateRef.current = null;
+      triggeredRef.current.clear();
+      collisionObserverRef.current = null;
+      sceneRef.current = null;
     };
-  }, [primaryModel, running]);
+  }, [primaryModel]);
+
+  useEffect(() => {
+    const aggregate = sphereAggregateRef.current;
+    const mesh = sphereMeshRef.current;
+    if (!aggregate || !aggregate.body || !mesh) {
+      return;
+    }
+
+    const body = aggregate.body;
+
+    if (running) {
+      const launchDirection = Vector3.Zero().subtract(mesh.position).normalize();
+      const initialVelocity = launchDirection.scale(launchSpeed);
+      body.setMotionType(PhysicsMotionType.DYNAMIC);
+      body.setMassProperties({ mass: 1 });
+      body.setAngularVelocity(Vector3.Zero());
+      body.setLinearVelocity(Vector3.Zero());
+      body.setLinearVelocity(initialVelocity);
+    } else {
+      body.setMotionType(PhysicsMotionType.STATIC);
+      body.setAngularVelocity(Vector3.Zero());
+      body.setLinearVelocity(Vector3.Zero());
+      body.setMassProperties({ mass: 0 });
+    }
+  }, [running, launchSpeed]);
 
   useEffect(() => {
     if (running) {
@@ -272,6 +277,65 @@ export function HavokViewer({
     }
     aggregate.body.setLinearVelocity(Vector3.Zero());
   }, [launchSpeed, running]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const sphereAggregate = sphereAggregateRef.current;
+    if (!scene || !sphereAggregate || !sphereAggregate.body) {
+      return;
+    }
+
+    const physicsPlugin = scene.getPhysicsEngine()?.getPhysicsPlugin() as HavokPlugin | undefined;
+    if (!physicsPlugin) {
+      return;
+    }
+
+    const body = sphereAggregate.body;
+    const collisionObservable = physicsPlugin.getCollisionObservable(body);
+
+    if (collisionObserverRef.current) {
+      collisionObservable.remove(collisionObserverRef.current);
+      collisionObserverRef.current = null;
+    }
+    physicsPlugin.setCollisionCallbackEnabled(body, false);
+
+    if (running) {
+      const planeAggregate = planeAggregateRef.current;
+      const primaryAggregate = primaryAggregateRef.current;
+      if (!planeAggregate?.body || !primaryAggregate?.body) {
+        return;
+      }
+      triggeredRef.current = new Set();
+      physicsPlugin.setCollisionCallbackEnabled(body, true);
+      const observer = collisionObservable.add((event: IPhysicsCollisionEvent) => {
+        if (event.collidedAgainst === primaryAggregate.body && !triggeredRef.current.has("primary")) {
+          triggeredRef.current.add("primary");
+          window.setTimeout(() => {
+            window.alert(
+              `Collision detected: sphere hit the ${PRIMARY_MODELS[primaryModel].label.toLowerCase()} mesh.`
+            );
+          }, 0);
+        }
+        if (event.collidedAgainst === planeAggregate.body && !triggeredRef.current.has("plane")) {
+          triggeredRef.current.add("plane");
+          window.setTimeout(() => {
+            window.alert("Collision detected: sphere impacted the plane.");
+          }, 0);
+        }
+      });
+      collisionObserverRef.current = observer;
+    } else {
+      triggeredRef.current.clear();
+    }
+
+    return () => {
+      if (collisionObserverRef.current) {
+        collisionObservable.remove(collisionObserverRef.current);
+        collisionObserverRef.current = null;
+      }
+      physicsPlugin.setCollisionCallbackEnabled(body, false);
+    };
+  }, [running, primaryModel]);
 
   return (
     <div className="havok-viewer">

@@ -23,7 +23,6 @@ export default function App(): JSX.Element {
 
   const handleStart = () => {
     setIsRunning(true);
-    setSessionKey((prev) => prev + 1);
   };
 
   return (
