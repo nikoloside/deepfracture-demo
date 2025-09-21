@@ -90,7 +90,7 @@ export default function App(): JSX.Element {
       <section className="panel">
         <h2 className="panel__title">Havok Engine Preview</h2>
         <p className="panel__note">
-          Current mesh: {PRIMARY_MODELS[primaryModel].label}. Drag to orbit the camera; the sphere launches from z=10 and reacts to collisions.
+          Current mesh: {PRIMARY_MODELS[primaryModel].label}. Drag to orbit the camera; press start to fire the sphere from (0, 0, 10) and watch Havok mesh collisions play out.
         </p>
         <ul className="panel__list">
           {modelOptions.map((option) => (

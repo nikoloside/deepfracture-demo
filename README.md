@@ -52,3 +52,4 @@ DeepFracture-demo/
 - Run `npm run lint` before submitting changes to ensure ESLint passes.
 - Place mock data and shared view models in `src/mocks/` or `src/lib/` (create these folders as needed) to keep components lean.
 - Document environment variables in `.env.example` and avoid committing secrets.
+- Havok physics depends on the bundled runtime at `public/havok/HavokPhysics.wasm`; refresh this file if the `@babylonjs/havok` package is upgraded.

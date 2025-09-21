@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This Vite app is purely front-end. Components and hooks live in `src/`, with `App.tsx` handling demo panels and `main.tsx` bootstrapping React through `index.html`. Keep global resets in `index.css`, component styles beside the view (`App.css`), and reusable logic in `src/lib/`. Drop mock payloads in `src/mocks/` and static assets in `public/`. Tooling sits at the root: `vite.config.ts` for builds, `vitest.config.ts` plus `vitest.setup.ts` for tests, and `eslint.config.js` for lint rules.
+This Vite app is purely front-end. Components and hooks live in `src/`, with `App.tsx` handling demo panels and `main.tsx` bootstrapping React through `index.html`. Keep global resets in `index.css`, component styles beside the view (`App.css`), and reusable logic in `src/lib/`. Drop mock payloads in `src/mocks/` and static assets in `public/`. Tooling sits at the root: `vite.config.ts` for builds, `vitest.config.ts` plus `vitest.setup.ts` for tests, and `eslint.config.js` for lint rules. Havok’s runtime ships in `public/havok/HavokPhysics.wasm`; refresh it when bumping `@babylonjs/havok`.
 
 ## Build, Test, and Development Commands
 - `npm install` – install or refresh dependencies.
