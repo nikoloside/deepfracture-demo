@@ -1,5 +1,5 @@
 import { useState } from "react";
-import logo from "./assets/react.svg";
+import logo from "./assets/cracked-rock.svg";
 import "./App.css";
 import { HavokViewer, PRIMARY_MODELS, type PrimaryModel } from "./components/HavokViewer";
 
@@ -28,7 +28,7 @@ export default function App(): JSX.Element {
   return (
     <main className="app">
       <header className="app__header">
-        <img src={logo} className="app__logo" alt="React logo" />
+        <img src={logo} className="app__logo" alt="Cracked rock icon" />
         <h1 className="app__title">DeepFracture Insight Demo</h1>
       </header>
 
