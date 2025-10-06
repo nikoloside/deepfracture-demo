@@ -11,7 +11,7 @@ export default function App(): JSX.Element {
   const [sessionKey, setSessionKey] = useState(0);
   const [launchAngle, setLaunchAngle] = useState(0);
   const [launchElevation, setLaunchElevation] = useState(DEFAULT_LAUNCH_ELEVATION);
-  const [launchSpeed, setLaunchSpeed] = useState(6.5);
+  const [launchSpeed, setLaunchSpeed] = useState(42.5);
 
   const modelOptions = Object.keys(PRIMARY_MODELS) as PrimaryModel[];
 
@@ -86,9 +86,9 @@ export default function App(): JSX.Element {
             <span className="panel__control-label">Launch speed</span>
             <input
               type="range"
-              min="2"
-              max="12"
-              step="0.1"
+              min="20"
+              max="50"
+              step="0.5"
               value={launchSpeed}
               onChange={(event) => setLaunchSpeed(Number(event.target.value))}
               className="panel__slider"

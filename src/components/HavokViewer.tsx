@@ -19,6 +19,17 @@ import HavokPhysics from "@babylonjs/havok";
 import type { Nullable } from "@babylonjs/core/types";
 import "@babylonjs/core/Physics/joinedPhysicsEngineComponent";
 
+import {
+  bufferImpact,
+  createFractureJob,
+  drainFractureQueue,
+  getFractureQueue,
+  toFractureImpact,
+  FractureWorkerClient
+} from "../lib/fracture";
+import type { FractureImpact } from "../lib/fracture";
+import type { FractureWorkerResponse } from "../lib/fracture";
+
 import "@babylonjs/loaders/OBJ/objFileLoader";
 
 const BASE_MODELS = {
@@ -44,6 +55,9 @@ const DEFAULT_LAUNCH_RADIUS = 4.5;
 const DEFAULT_LAUNCH_HEIGHT = 10;
 const LAUNCH_DISTANCE = Math.sqrt(DEFAULT_LAUNCH_RADIUS ** 2 + DEFAULT_LAUNCH_HEIGHT ** 2);
 const MIN_LAUNCH_HEIGHT = 0.5;
+const FRACTURE_IMPULSE_THRESHOLD = 25;
+const MAX_IMPACTS_PER_JOB = 4;
+const FRACTURE_BATCH_INTERVAL_MS = 150;
 
 interface HavokViewerProps {
   primaryModel: PrimaryModel;
@@ -66,9 +80,66 @@ export function HavokViewer({
   const sphereAggregateRef = useRef<PhysicsAggregate | null>(null);
   const planeAggregateRef = useRef<PhysicsAggregate | null>(null);
   const primaryAggregateRef = useRef<PhysicsAggregate | null>(null);
+  const primaryMeshRef = useRef<Mesh | null>(null);
   const sceneRef = useRef<Scene | null>(null);
   const collisionObserverRef = useRef<Observer<IPhysicsCollisionEvent> | null>(null);
   const triggeredRef = useRef<Set<string>>(new Set());
+  const fractureQueueRef = useRef(getFractureQueue());
+  const collisionBufferRef = useRef<FractureImpact[]>([]);
+  const workerClientRef = useRef<FractureWorkerClient | null>(null);
+
+  const [lastFractureEvent, setLastFractureEvent] = useState<FractureWorkerResponse | null>(null);
+
+  useEffect(() => {
+    const client = new FractureWorkerClient();
+    workerClientRef.current = client;
+
+    const dispose = client.addMessageListener((event) => {
+      const data = event.data;
+      console.info("[FractureWorker] response", data);
+      setLastFractureEvent(data);
+    });
+
+    return () => {
+      dispose();
+      workerClientRef.current = null;
+      fractureQueueRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const queue = fractureQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      const jobs = drainFractureQueue(queue);
+      if (jobs.length === 0) {
+        return;
+      }
+
+      const client = workerClientRef.current;
+      if (!client) {
+        queue.clear();
+        console.warn("[HavokViewer] Fracture queue drained without worker client; clearing.");
+        return;
+      }
+
+      console.info("[HavokViewer] Dispatching fracture batch", {
+        count: jobs.length,
+        meshIds: jobs.map((job) => job.meshId)
+      });
+
+      for (const job of jobs) {
+        client.submit(job);
+      }
+    }, FRACTURE_BATCH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -180,6 +251,7 @@ export function HavokViewer({
         sphereAggregateRef.current = sphereAggregate;
         planeAggregateRef.current = planeAggregate;
         primaryAggregateRef.current = primaryAggregate;
+        primaryMeshRef.current = primaryMesh;
 
         const resize = () => {
           if (engine && !engine.isDisposed) {
@@ -224,6 +296,7 @@ export function HavokViewer({
       planeAggregateRef.current = null;
       primaryAggregateRef.current = null;
       triggeredRef.current.clear();
+      collisionBufferRef.current = [];
       collisionObserverRef.current = null;
       sceneRef.current = null;
     };
@@ -300,27 +373,62 @@ export function HavokViewer({
     physicsPlugin.setCollisionCallbackEnabled(body, false);
 
     if (running) {
-      const planeAggregate = planeAggregateRef.current;
       const primaryAggregate = primaryAggregateRef.current;
-      if (!planeAggregate?.body || !primaryAggregate?.body) {
+      if (!primaryAggregate?.body) {
         return;
       }
       triggeredRef.current = new Set();
       physicsPlugin.setCollisionCallbackEnabled(body, true);
       const observer = collisionObservable.add((event: IPhysicsCollisionEvent) => {
-        if (event.collidedAgainst === primaryAggregate.body && !triggeredRef.current.has("primary")) {
+        if (event.collidedAgainst === primaryAggregate.body) {
+          if (triggeredRef.current.has("primary")) {
+            console.debug("[HavokViewer] Fracture already triggered for primary mesh; ignoring collision.");
+            return;
+          }
+          const primaryMesh = primaryMeshRef.current;
+          if (!primaryMesh) {
+            return;
+          }
+
+          const impact = toFractureImpact(primaryMesh, event);
+          if (!impact) {
+            return;
+          }
+
+          console.log("[HavokViewer] impact detail", {
+            impulse: impact.impulse,
+            worldPoint: impact.worldPoint.asArray(),
+            worldNormal: impact.worldNormal.asArray(),
+            localPoint: impact.localPoint.asArray(),
+            localNormal: impact.localNormal.asArray()
+          });
+
+          if (impact.impulse < FRACTURE_IMPULSE_THRESHOLD) {
+            console.debug("[HavokViewer] Ignoring impact below threshold", {
+              impulse: impact.impulse,
+              threshold: FRACTURE_IMPULSE_THRESHOLD
+            });
+            return;
+          }
+
+          collisionBufferRef.current = bufferImpact(collisionBufferRef.current, impact, {
+            maxImpacts: MAX_IMPACTS_PER_JOB
+          });
+
+          if (collisionBufferRef.current.length === 0) {
+            return;
+          }
+
+          const job = createFractureJob(primaryMesh.id || primaryMesh.uniqueId.toString(), [
+            ...collisionBufferRef.current
+          ]);
+          fractureQueueRef.current.enqueue(job);
+          console.info("[HavokViewer] Fracture job enqueued", {
+            meshId: job.meshId,
+            impacts: job.impacts.length
+          });
           triggeredRef.current.add("primary");
-          window.setTimeout(() => {
-            window.alert(
-              `Collision detected: sphere hit the ${PRIMARY_MODELS[primaryModel].label.toLowerCase()} mesh.`
-            );
-          }, 0);
-        }
-        if (event.collidedAgainst === planeAggregate.body && !triggeredRef.current.has("plane")) {
-          triggeredRef.current.add("plane");
-          window.setTimeout(() => {
-            window.alert("Collision detected: sphere impacted the plane.");
-          }, 0);
+          collisionBufferRef.current = [];
         }
       });
       collisionObserverRef.current = observer;
@@ -341,6 +449,19 @@ export function HavokViewer({
     <div className="havok-viewer">
       <canvas ref={canvasRef} className="havok-viewer__canvas" />
       {error ? <p className="havok-viewer__error">{error}</p> : null}
+      {lastFractureEvent ? (
+        <p className="havok-viewer__debug" data-testid="fracture-worker-status">
+          {lastFractureEvent.type === "job-completed"
+            ? `Fracture job completed for ${lastFractureEvent.meshId}: ${lastFractureEvent.volume.dimensions.join(
+                "×"
+              )} voxels, value range ${lastFractureEvent.volume.summary.voxelMin.toFixed(
+                2
+              )}–${lastFractureEvent.volume.summary.voxelMax.toFixed(2)}, impulse mean ${lastFractureEvent.volume.summary.impulseMean.toFixed(
+                2
+              )}, active region voxels ${lastFractureEvent.morphology.summary.activeVoxelCount}.`
+            : `Fracture job failed for ${lastFractureEvent.meshId}: ${lastFractureEvent.error}`}
+        </p>
+      ) : null}
     </div>
   );
 }

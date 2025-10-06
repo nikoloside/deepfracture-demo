@@ -1,24 +1,24 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This Vite app is purely front-end. Components and hooks live in `src/`, with `App.tsx` handling demo panels and `main.tsx` bootstrapping React through `index.html`. Keep global resets in `index.css`, component styles beside the view (`App.css`), and reusable logic in `src/lib/`. Drop mock payloads in `src/mocks/` and static assets in `public/`. Tooling sits at the root: `vite.config.ts` for builds, `vitest.config.ts` plus `vitest.setup.ts` for tests, and `eslint.config.js` for lint rules. Havok’s runtime ships in `public/havok/HavokPhysics.wasm`; refresh it when bumping `@babylonjs/havok`.
+Keep all React components and hooks under `src/`; demo panels live in `App.tsx` and the entry point stays in `main.tsx` with `index.html`. Store shared helpers in `src/lib/`, UI styles beside their components (`App.css`), and global resets in `index.css`. Place test files next to the code they verify, and drop mock payloads in `src/mocks/`. Static assets (icons, wasm) belong in `public/`, including Havok’s runtime under `public/havok/`.
 
 ## Build, Test, and Development Commands
-- `npm install` – install or refresh dependencies.
-- `npm run dev` – start Vite on port 5173 with hot reload.
-- `npm run test` – execute Vitest (jsdom, Testing Library) via the shared setup file.
-- `npm run lint` – run the flat ESLint config across all TypeScript sources.
-- `npm run build` – perform type checks and create a production bundle.
-- `npm run preview` – serve the built assets on port 4173.
+Use `npm install` to sync dependencies. Run `npm run dev` for the Vite dev server on port 5173, and `npm run preview` to inspect the production bundle locally. Execute `npm run build` to type check and generate the production output. Guard quality with `npm run test` (Vitest + Testing Library) and `npm run lint` for the flat ESLint config.
 
 ## Coding Style & Naming Conventions
-Write modern React function components with strict TypeScript. Components use PascalCase, hooks start with `use`, utilities stay camelCase. Type props and state with explicit interfaces or `type` aliases. Follow the default Prettier formatting and class naming `component__element`. Keep JSX lean; push data shaping into helpers under `src/lib/`.
+Write modern React function components in strict TypeScript. Components use PascalCase, hooks start with `use`, and utilities remain camelCase. Co-locate CSS modules named `ComponentName.css` and favor `component__element` class patterns. Prettier formatting is the standard—run `npm run lint -- --fix` when needed. Avoid introducing non-ASCII characters unless already present.
 
 ## Testing Guidelines
-Tests live next to the code they cover, named `*.test.tsx`. Use Vitest with Testing Library helpers (`render`, `screen`) and matchers from `@testing-library/jest-dom`. Model fixtures or API stubs via `src/mocks/` and `vi.fn()` to avoid real network calls. Add both happy-path and boundary assertions before review.
+Use Vitest with jsdom and Testing Library matchers from `@testing-library/jest-dom`. Name tests `ComponentName.test.tsx` beside their components. Mock side effects with `vi.fn()` and fixtures in `src/mocks/`. Cover the happy path plus boundary conditions before review. Trigger the suite with `npm run test` and keep it passing before pushing.
 
 ## Commit & Pull Request Guidelines
-Use Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`) with short, imperative summaries. Keep each commit focused and rebase before opening a PR. Describe the problem, solution, and validation (`npm run test`, screenshots, gifs) in the PR body, and link issues with `Fixes #id` or `Refs #id`.
+Follow Conventional Commits (`feat:`, `fix:`, `chore:`) with focused, imperative summaries. Each PR should describe the problem, solution, and validation steps (e.g., `npm run test`). Link issues using `Fixes #id` or `Refs #id`, and attach screenshots or gifs for UI changes. Rebase onto the latest main branch prior to opening the PR.
 
 ## Environment & Data Hygiene
-Document every environment flag in `.env.example` and access it via `import.meta.env`. Never commit real credentials or patient data. Heavy assets belong in the shared artifact bucket—reference download steps in the README when they are required locally.
+Document every environment flag in `.env.example` and read them through `import.meta.env`. Never store secrets or patient data in the repo. Large binaries belong in shared storage—reference download instructions in the README when required.
+
+## Fracture Pipeline Implementation
+Replicate the PyBullet fracture flow in-browser. Extend `src/components/HavokViewer.tsx` to capture Havok collision events, extracting world-space `point`, `normal`, and `impulse` before transforming them into the impacted mesh’s local frame. Serialize the top impacts per frame into a job queue. Run neural inference using an ONNX export of the PyTorch model via `onnxruntime-web` (WebGL/WebGPU backend) inside a Web Worker; target a `Float32Array` volume of 128³ values. Replace Fiji/ImageJ steps with WebGL/WebGPU compute passes that implement extended minima, imposed minima, and watershed segmentation; reuse shared utilities in `src/lib/volume/`. Swap the Python mesh booleans for an in-memory JS CSG workflow (e.g., `three-mesh-bvh` with `three-bvh-csg`) that splits fragments without temp files. Feed each fragment back through Babylon by instantiating meshes, materials, and `PhysicsAggregate` bodies seeded with the preserved linear and angular velocity. Keep intermediate buffers in memory, and gate the fracture trigger with configurable thresholds to avoid spurious splits.
+
+The morphology shim currently lives in `src/lib/volume/morphology.ts`; it thresholds the 128³ volume and returns aggregate statistics that ship back through the worker response. Replace this stub with WebGPU kernels for the watershed pipeline when bringing the real segmentation online.
